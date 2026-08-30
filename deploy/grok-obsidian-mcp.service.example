@@ -1,0 +1,23 @@
+[Unit]
+Description=Grok research staging MCP
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=grok-mcp
+Group=grok-mcp
+WorkingDirectory=/opt/grok-obsidian-mcp
+EnvironmentFile=/etc/grok-obsidian-mcp.env
+ExecStart=/usr/bin/node /opt/grok-obsidian-mcp/dist/server.js
+Restart=on-failure
+RestartSec=5s
+UMask=0077
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectHome=true
+ProtectSystem=strict
+ReadWritePaths=/srv/grok-staging/Grok Research Inbox /srv/grok-staging/service-audit
+
+[Install]
+WantedBy=multi-user.target

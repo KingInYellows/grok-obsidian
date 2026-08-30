@@ -1,0 +1,17 @@
+node_modules/
+dist/
+.env
+.env.*
+!.env.example
+.envrc
+*.log
+coverage/
+work/
+runtime/
+staging/
+secrets/
+*.pem
+*.key
+*.p12
+*.pfx
+*.partial

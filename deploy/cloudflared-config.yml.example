@@ -1,0 +1,11 @@
+# Template only. Do not place real tunnel credentials in this repository.
+tunnel: <TUNNEL_UUID>
+credentials-file: /protected/path/to/<TUNNEL_UUID>.json
+
+ingress:
+  - hostname: mcp.example.com
+    path: ^/mcp$
+    service: http://127.0.0.1:3100
+    originRequest:
+      httpHostHeader: mcp.example.com
+  - service: http_status:404
