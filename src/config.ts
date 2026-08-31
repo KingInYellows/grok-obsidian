@@ -121,6 +121,8 @@ export async function loadConfig(
     throw new ConfigurationError("inbox and audit directories cannot contain one another");
   }
 
+  const noteFileMode = z.enum(["0600", "0640"]).parse(env.GROK_MCP_NOTE_FILE_MODE ?? "0600");
+
   const accessTeamDomain = parseTeamDomain(env.GROK_MCP_ACCESS_TEAM_DOMAIN);
   const accessAudience = env.GROK_MCP_ACCESS_AUD?.trim() || undefined;
   if (authMode === "cloudflare-access" && (!accessTeamDomain || !accessAudience)) {
@@ -135,6 +137,7 @@ export async function loadConfig(
     stagingRoot,
     inboxDir,
     auditDir,
+    noteFileMode: noteFileMode === "0640" ? 0o640 : 0o600,
     authMode,
     ...(accessTeamDomain ? { accessTeamDomain } : {}),
     ...(accessAudience ? { accessAudience } : {}),
@@ -160,6 +163,13 @@ export async function loadConfig(
       8_192,
       131_072,
       "GROK_MCP_MAX_NOTE_BYTES",
+    ),
+    minFreeBytes: parseInteger(
+      env.GROK_MCP_MIN_FREE_BYTES,
+      1_073_741_824,
+      1,
+      Number.MAX_SAFE_INTEGER,
+      "GROK_MCP_MIN_FREE_BYTES",
     ),
     requestsPerMinute: parseInteger(
       env.GROK_MCP_REQUESTS_PER_MINUTE,

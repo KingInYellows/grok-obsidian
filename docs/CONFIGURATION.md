@@ -17,7 +17,7 @@ Cloudflare Access mode also requires:
 | --- | --- |
 | `GROK_MCP_ACCESS_TEAM_DOMAIN` | Exact team origin such as `https://your-team.cloudflareaccess.com`. |
 | `GROK_MCP_ACCESS_AUD` | Application Audience tag for the Access application. |
-| `GROK_MCP_ALLOWED_HOSTS` | Comma-separated hostnames accepted at the origin, including the later tunnel hostname. Do not include schemes or paths. |
+| `GROK_MCP_ALLOWED_HOSTS` | Comma-separated hostnames accepted at the origin, including the public tunnel hostname. Do not include schemes or paths. |
 
 `GROK_MCP_ACCESS_AUD` is an identifier, not a shared authentication secret. Do not put Access assertions, tunnel credentials, API tokens, client secrets, or vault content in repository files.
 
@@ -29,6 +29,7 @@ Cloudflare Access mode also requires:
 | `GROK_MCP_MAX_REQUEST_BYTES` | `131072` | 16 KiB to 1 MiB |
 | `GROK_MCP_MAX_RESEARCH_BYTES` | `50000` | 1 KiB to 50,000 bytes |
 | `GROK_MCP_MAX_NOTE_BYTES` | `65536` | 8 KiB to 128 KiB |
+| `GROK_MCP_MIN_FREE_BYTES` | `1073741824` (1 GiB) | 1 to 9007199254740991 bytes |
 | `GROK_MCP_REQUESTS_PER_MINUTE` | `120` | 1 to 10,000 per authenticated subject |
 | `GROK_MCP_ENABLE_LIST_SUBMISSIONS` | `true` | `true` or `false` |
 | `GROK_MCP_ALLOWED_ORIGINS` | empty | Exact comma-separated HTTPS origins. Any supplied `Origin` is rejected unless listed. |
@@ -48,4 +49,35 @@ The staging filesystem must support creation of hardlinks within the inbox direc
 
 ## Low-privilege service account
 
-Before real staging is selected, create a dedicated OS identity and grant it only the permissions needed to create files in the selected inbox and records under the audit directory. Deny or omit access to the canonical vault, user profile, SSH keys, browser data, and other repositories. The included systemd unit is a template; its placeholder paths and account must be replaced during the later user-authorized setup.
+Before real staging is selected, create a dedicated OS identity and grant it only the permissions needed to create files in the selected inbox and records under the audit directory. Deny or omit access to the canonical vault, user profile, SSH keys, browser data, and other repositories. The included systemd unit is a template; its placeholder paths and account must be replaced during an authorized setup.
+
+
+## Optional candidate permissions for a separate sync identity
+
+`GROK_MCP_NOTE_FILE_MODE` accepts only `0600` or `0640`, defaulting to `0600`.
+The opt-in `0640` mode applies only to candidate files through descriptor-based
+chmod, including under `UMask=0077`. Audit records remain `0600`. A dedicated
+setgid inbox group and the isolated service bind provide read access to the
+sync identity without exposing audit records or the vault root to Grok.
+
+Before enabling group-readable candidates, the sync wrapper must reject the
+`unsupported` file type so transient `.partial` files are not uploaded. Config
+syncing remains disabled. Changing this setting does not itself configure a
+mount, grant group access, change sync mode, or enable the permanent service.
+
+
+A deployment may use an inbox-only group or narrowly scoped default ACL to give a separate sync identity read access to candidates. Do not grant that identity access to service audit records or give the MCP access to the rest of the vault. Configure and validate these permissions separately; no host-specific ACL or mount is installed by this package.
+
+## Storage admission safeguard
+
+Before each new submission, within the store's serialized operation, the server
+checks available bytes for both the inbox and audit filesystems using `statfs`
+blocks available to the service identity. If either is below
+`GROK_MCP_MIN_FREE_BYTES`, or the check fails, no submission files are created and
+the tool returns a sanitized retryable failure. Matching idempotent replays still
+return the original receipt without requiring free space.
+
+This is an admission threshold, not a filesystem quota or a reservation: other
+writers can consume space after the check, and an accepted write can cross the
+threshold. Write failures clean up files created by that attempt; existing
+exclusive-create collisions are preserved. Retain backups and capacity planning.

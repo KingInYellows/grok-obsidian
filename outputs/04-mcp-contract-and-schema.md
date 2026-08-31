@@ -1,6 +1,8 @@
-# Proposed MCP contract and data schema
+# MCP contract and data schema
 
-The server advertises only the two tools below. A deployment should additionally configure an xAI `allowed_tools` list when the connection method supports it. That list is defense in depth, not a substitute for a server that exposes nothing else. The service writes candidates into a fixed staging directory, preferably outside the canonical vault.
+> Current status, 2026-08-31: Production advertises only submit_research_note. The optional list_submissions implementation is disabled. The service sees only its fixed inbox bind; audit remains outside the vault. See [project status](../docs/PROJECT-STATUS.md) for recorded acceptance and limits. Earlier conceptual schemas describe the reusable implementation; src/schema.ts is the executable input definition.
+
+The implementation supports the two tools below, but production advertises only `submit_research_note`. A deployment should additionally configure an xAI `allowed_tools` list when the connection method supports it. That list is defense in depth, not a substitute for a server that exposes nothing else. The service writes candidates into a fixed staging directory, preferably outside the canonical vault.
 
 ## `submit_research_note`
 
@@ -105,3 +107,19 @@ The protocol has no tools, resources, prompts, or endpoints for:
 ## File-system invariant for Option A
 
 The implementation receives a fixed absolute staging root at deployment time. It creates only `root/<server-generated-name>.md` through exclusive creation. It rejects traversal, hidden paths, symlinks/reparse points, and hardlinks; performs platform-appropriate non-following checks before and during the operation; and validates the final resolved location remains below the root. The service account has write-only access to that staging folder where the operating system permits it and no access to the canonical vault.
+
+## Curator boundary after the resume review
+
+Retain the implemented intake schema. The approved public profile exposes only `submit_research_note`, with metadata listing disabled. The service uses its fixed staging path, while an isolated bind maps only that inbox into the vault; service audit remains outside the vault. No vault destination, promotion flag, sync setting, or curator credential belongs in caller input.
+
+`accepted` means the service recorded a candidate. It does not mean Hermes approved it, a canonical note exists, or any client received it. `list_submissions` remains a view of intake receipts and must not query Hermes or the vault to obtain review or sync status.
+
+In the current implementation, `content_sha256` is SHA-256 of the UTF-8 `body_markdown`, not the rendered Markdown file or the full request. An unchanged replay returns the original receipt; reuse of the same subject/key with different request content is rejected. A full-file digest for synthetic delivery testing must be recorded separately as `file_sha256`.
+
+Proposed Hermes handoff, outside MCP: preserve the intake ID and body digest as provenance, record the review decision separately, and author a separate canonical note only after approval. Preserve the original candidate and receipt. Deduplicate promotion by intake ID and record the canonical result in a curator-owned record inaccessible to Grok. Compare any edited canonical note against its own full-file digest, not the original body's digest. These curator records and delivery acknowledgements are proposed requirements, not implemented tools or existing services.
+
+See [project status](../docs/PROJECT-STATUS.md) for the remaining curator and client-delivery checks.
+
+## Implemented inbox mapping
+
+For the reference deployment, the service still sees its fixed staging inbox path, but an isolated bind maps only that inbox to the dedicated directory inside the vault. Audit remains external. Candidate-only 0640 mode and the inbox ACL permit syncing; no vault paths or promotion capabilities were added to the protocol. See the [public status summary](../docs/PROJECT-STATUS.md).

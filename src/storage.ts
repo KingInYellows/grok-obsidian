@@ -8,12 +8,13 @@ import {
   readFile,
   realpath,
   rename,
+  statfs,
   unlink,
 } from "node:fs/promises";
 import path from "node:path";
 import { createHash, randomUUID } from "node:crypto";
 
-import { ConfigurationError, InputError } from "./errors.js";
+import { ConfigurationError, InputError, StorageUnavailableError } from "./errors.js";
 import {
   assertSafeGeneratedBasename,
   isStrictlyContained,
@@ -32,11 +33,16 @@ import type {
 interface StorageDependencies {
   readonly randomUuid: () => string;
   readonly now: () => Date;
+  readonly availableBytes: (directory: string) => Promise<bigint>;
 }
 
 const defaultDependencies: StorageDependencies = {
   randomUuid: randomUUID,
   now: () => new Date(),
+  availableBytes: async (directory) => {
+    const stats = await statfs(directory, { bigint: true });
+    return stats.bavail * stats.bsize;
+  },
 };
 
 function sha256(value: string): string {
@@ -144,7 +150,11 @@ function metadataFrom(record: SubmissionRecord): SubmissionMetadata {
   };
 }
 
-async function writeExclusive(filePath: string, content: string): Promise<void> {
+async function writeExclusive(
+  filePath: string,
+  content: string,
+  mode: 0o600 | 0o640 = 0o600,
+): Promise<void> {
   const handle = await open(
     filePath,
     fsConstants.O_CREAT | fsConstants.O_EXCL | fsConstants.O_WRONLY,
@@ -152,9 +162,16 @@ async function writeExclusive(filePath: string, content: string): Promise<void> 
   );
   try {
     await handle.writeFile(content, { encoding: "utf8" });
+    // Descriptor-based chmod preserves the exact candidate mode under a restrictive umask.
+    if (mode === 0o640) await handle.chmod(mode);
     await handle.sync();
-  } finally {
     await handle.close();
+  } catch (error) {
+    // Only clean up after this call successfully created the file with O_EXCL.
+    // In particular, an existing collision must never be unlinked.
+    await handle.close().catch(() => undefined);
+    await removeIfPresent(filePath);
+    throw error;
   }
 }
 
@@ -245,6 +262,7 @@ export class SubmissionStore {
         return receiptFrom(existing);
       }
 
+      await this.#assertStorageAvailable();
       for (let attempt = 0; attempt < 5; attempt += 1) {
         const submittedAt = this.#dependencies.now();
         if (Number.isNaN(submittedAt.getTime())) {
@@ -289,7 +307,7 @@ export class SubmissionStore {
         try {
           await writeExclusive(pendingPath, `${JSON.stringify(record)}\n`);
           pendingCreated = true;
-          await writeExclusive(tempPath, note);
+          await writeExclusive(tempPath, note, this.#config.noteFileMode);
           tempCreated = true;
           await link(tempPath, finalPath);
           finalPublished = true;
@@ -343,6 +361,20 @@ export class SubmissionStore {
           : {}),
       };
     });
+  }
+
+  async #assertStorageAvailable(): Promise<void> {
+    try {
+      for (const directory of [this.#config.inboxDir, this.#config.auditDir]) {
+        const available = await this.#dependencies.availableBytes(directory);
+        if (typeof available !== "bigint" || available < BigInt(this.#config.minFreeBytes)) {
+          throw new StorageUnavailableError("New submissions are paused because storage is unavailable.");
+        }
+      }
+    } catch {
+      // Do not expose filesystem paths or underlying statfs errors to the caller.
+      throw new StorageUnavailableError("New submissions are paused because storage is unavailable.");
+    }
   }
 
   async #assertRuntimeBoundary(): Promise<void> {

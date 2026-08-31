@@ -30,6 +30,7 @@ export function createCloudflareJwtValidator(config: AppConfig): JwtValidator {
       issuer: teamDomain,
       audience,
       algorithms: ["RS256"],
+      requiredClaims: ["iss", "sub", "aud", "exp"],
     });
     return payload;
   };
@@ -64,7 +65,7 @@ export class RequestAuthenticator {
     }
 
     const token = request.headers["cf-access-jwt-assertion"];
-    if (typeof token !== "string" || token.length === 0) {
+    if (typeof token !== "string" || token.length === 0 || token.includes(",")) {
       throw new AuthenticationError("missing Cloudflare Access assertion");
     }
     if (!this.#validateJwt) {
@@ -77,7 +78,7 @@ export class RequestAuthenticator {
     } catch {
       throw new AuthenticationError("invalid Cloudflare Access assertion");
     }
-    if (typeof payload.iss !== "string" || typeof payload.sub !== "string") {
+    if (typeof payload.iss !== "string" || typeof payload.sub !== "string" || payload.sub.length === 0) {
       throw new AuthenticationError("Cloudflare Access assertion lacks a stable subject");
     }
     return { ownerSubject: pseudonymizeIdentity(payload.iss, payload.sub) };

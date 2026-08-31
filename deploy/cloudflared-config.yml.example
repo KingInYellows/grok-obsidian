@@ -1,11 +1,11 @@
-# Template only. Do not place real tunnel credentials in this repository.
-tunnel: <TUNNEL_UUID>
-credentials-file: /protected/path/to/<TUNNEL_UUID>.json
-
+# PLACEHOLDER TEMPLATE: do not install over an existing tunnel configuration.
+# Adapt only an approved route after configuring Access Managed OAuth and
+# origin JWT validation. Preserve unrelated ingress and fallback ordering.
 ingress:
-  - hostname: mcp.example.com
+  - hostname: research.example.com
     path: ^/mcp$
-    service: http://127.0.0.1:3100
-    originRequest:
-      httpHostHeader: mcp.example.com
+    service: http://reverse-proxy.example:80
   - service: http_status:404
+# Keep the public Host for reverse-proxy routing and origin validation.
+# Restrict any proxy-to-origin relay to the intended source.
+# Managed OAuth discovery/login stays at the Cloudflare edge.

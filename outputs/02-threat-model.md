@@ -1,5 +1,7 @@
 # Threat model
 
+> Historical planning record from 2026-08-29. These original assumptions and questions are not the current deployment status or a new authorization request. See [project status](../docs/PROJECT-STATUS.md) for recorded acceptance and remaining checks.
+
 ## Assets
 
 - The confidentiality and integrity of every vault item outside `Grok Research Inbox`.

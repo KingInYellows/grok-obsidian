@@ -1,5 +1,7 @@
 # Decision questions for the user
 
+> Historical planning record from 2026-08-29. These original assumptions and questions are not the current deployment status or a new authorization request. See [project status](../docs/PROJECT-STATUS.md) for recorded acceptance and remaining checks.
+
 Please answer these before implementation or account setup begins.
 
 1. Do you approve the recommended topology: a localhost-only Streamable-HTTP MCP service behind a named Cloudflare Tunnel, writing candidates only to a fixed staging inbox outside the canonical vault where practical?

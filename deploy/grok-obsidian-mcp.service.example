@@ -17,7 +17,7 @@ NoNewPrivileges=true
 PrivateTmp=true
 ProtectHome=true
 ProtectSystem=strict
-ReadWritePaths=/srv/grok-staging/Grok Research Inbox /srv/grok-staging/service-audit
+ReadWritePaths="/srv/grok-staging/Grok Research Inbox" /srv/grok-staging/service-audit
 
 [Install]
 WantedBy=multi-user.target

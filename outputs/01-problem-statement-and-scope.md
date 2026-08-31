@@ -1,5 +1,7 @@
 # Problem statement and scope
 
+> Historical planning record from 2026-08-29. These original assumptions and questions are not the current deployment status or a new authorization request. See [project status](../docs/PROJECT-STATUS.md) for recorded acceptance and remaining checks.
+
 ## Problem
 
 Research created in the cloud Grok app needs a reliable landing place near a shared Obsidian vault without making the vault a general-purpose tool target. A connector that accepts arbitrary filesystem paths, exposes directory listing, or lets Grok edit existing notes would turn a one-way intake need into broad vault access. That is outside the intended trust boundary.

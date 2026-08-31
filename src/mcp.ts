@@ -1,6 +1,6 @@
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 
-import { InputError, RateLimitError } from "./errors.js";
+import { InputError, RateLimitError, StorageUnavailableError } from "./errors.js";
 import {
   listSubmissionsSchema,
   receiptSchema,
@@ -18,7 +18,7 @@ function toolError(message: string) {
 }
 
 function publicToolFailure(error: unknown, tool: string) {
-  if (error instanceof InputError || error instanceof RateLimitError) {
+  if (error instanceof InputError || error instanceof RateLimitError || error instanceof StorageUnavailableError) {
     return toolError(error.message);
   }
   process.stderr.write(

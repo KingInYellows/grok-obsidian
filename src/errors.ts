@@ -13,3 +13,7 @@ export class AuthenticationError extends Error {
 export class RateLimitError extends Error {
   override readonly name = "RateLimitError";
 }
+
+export class StorageUnavailableError extends Error {
+  override readonly name = "StorageUnavailableError";
+}

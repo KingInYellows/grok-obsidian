@@ -141,3 +141,42 @@ test("HTTP boundary rejects unexpected origins and oversized requests", async ()
     await fixture.cleanup();
   }
 });
+
+
+test("public intake profile exposes only submit and preserves metadata-only idempotency", async () => {
+  const fixture = await createTestFixture({ GROK_MCP_ENABLE_LIST_SUBMISSIONS: "false" });
+  const store = new SubmissionStore(fixture.config);
+  await store.initialize();
+  const server = createHttpServer(fixture.config, {
+    authenticator: new RequestAuthenticator(fixture.config),
+    rateLimiter: new SubjectRateLimiter(fixture.config.requestsPerMinute),
+    store,
+  });
+  const client = new Client({ name: "single-intake-test", version: "1.0.0" });
+  try {
+    await new Promise<void>((resolve, reject) => {
+      server.once("error", reject);
+      server.listen(0, "127.0.0.1", resolve);
+    });
+    const port = (server.address() as AddressInfo).port;
+    await client.connect(new StreamableHTTPClientTransport(new URL(`http://127.0.0.1:${port}/mcp`)));
+    assert.deepEqual((await client.listTools()).tools.map((tool) => tool.name), ["submit_research_note"]);
+    const denied = await client.callTool({ name: "list_submissions", arguments: {} });
+    assert.equal(denied.isError, true);
+    const request = { name: "submit_research_note", arguments: {
+      title: "Synthetic public-profile fixture",
+      body_markdown: "Synthetic body must never appear in receipt",
+      idempotency_key: "single_intake_fixture_20260830",
+    } };
+    const accepted = await client.callTool(request);
+    assert.notEqual(accepted.isError, true);
+    assert.deepEqual(Object.keys(accepted.structuredContent ?? {}).sort(),
+      ["content_sha256", "note_id", "status", "submitted_at"]);
+    assert.deepEqual((await client.callTool(request)).structuredContent, accepted.structuredContent);
+    assert.equal(JSON.stringify(accepted).includes(request.arguments.body_markdown), false);
+  } finally {
+    await client.close();
+    await new Promise<void>((resolve, reject) => server.close((error) => error ? reject(error) : resolve()));
+    await fixture.cleanup();
+  }
+});

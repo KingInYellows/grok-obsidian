@@ -1,28 +1,24 @@
-# Later Cloudflare and Grok setup
+# Cloudflare and Grok setup reference
 
-This is a runbook for later user-authorized work. Nothing in the implementation task performs these actions.
+The reference deployment passed a recorded authenticated Grok submission on 2026-08-31. See [project status](PROJECT-STATUS.md) for evidence and limits. This guide describes a new deployment; it is not permission to repeat setup on an existing installation.
 
-## Stop gates
+## Request path
 
-- Do not create or connect a Tunnel while `GROK_MCP_AUTH_MODE=local-development`.
-- Do not expose the service until Cloudflare Access Managed OAuth is configured and the origin has the matching team domain, audience, and allowed hostname.
-- Do not register the real connector until a harmless synthetic compatibility proof succeeds.
-- If Grok cannot complete the Managed OAuth flow, stop for a design decision. Do not use public access or a shared static token.
+The reference topology is Grok over public HTTPS -> Cloudflare Access Managed OAuth -> named Tunnel -> existing reverse proxy -> source-restricted relay -> MCP at `127.0.0.1:3100`.
 
-## Remaining user actions
+The MCP independently validates the signed `Cf-Access-Jwt-Assertion`. Preserve the public Host header through the proxy and allow it explicitly in server configuration. Any LAN relay must be restricted to the intended proxy source and must not turn the loopback service into a generally reachable origin. A private HTTP hop is unencrypted; choose and test its transport protection for your network.
 
-1. Choose or create the actual staging root and `Grok Research Inbox`. Prefer a location outside the canonical vault. Create a separate audit directory under the same staging root.
-2. Create or select the low-privilege OS account. Give it write access only to the inbox and audit directories.
-3. Put runtime environment values in the host's protected service configuration. Set `GROK_MCP_AUTH_MODE=cloudflare-access`, the Access team domain, the Access application audience, and the intended MCP hostname in `GROK_MCP_ALLOWED_HOSTS`.
-4. Build and run the service locally. Confirm it listens only on `127.0.0.1` and refuses requests without a valid synthetic Access assertion once Access mode is enabled.
-5. Create a durable named Cloudflare Tunnel and an Access application for the MCP hostname. Enable Managed OAuth. A quick Tunnel is not the durable design.
-6. Configure the named Tunnel to send only the exact MCP route to `http://127.0.0.1:3100`; return a Cloudflare 404 for all fallback ingress.
-7. Run a harmless connector proof with synthetic content. Confirm the standard OAuth browser flow completes, the origin validates `Cf-Access-Jwt-Assertion`, and only `submit_research_note` plus optional `list_submissions` are discovered.
-8. Register `https://mcp.example.com/mcp` as the Grok custom MCP URL, replacing the placeholder hostname. Where Grok exposes a tool allowlist, select only the two server tools.
-9. Submit one synthetic candidate and verify that Hermes/Hali can review it without granting Grok any canonical-vault capability.
+Use your own hostname, such as `research.example.com`, and keep actual addresses, allowed identities and credentials in protected operator configuration. The included Tunnel file contains placeholders only. Preserve existing ingress ordering and unrelated routes when adapting it. Managed OAuth discovery and login are handled at the edge, not by adding unauthenticated routes to this server.
 
-## Origin JWT validation already implemented
+## Acceptance sequence
 
-In `cloudflare-access` mode, the server obtains Cloudflare's rotating public signing keys from the configured team domain and validates the JWT signature, `iss`, `aud`, and `sub` claims from `Cf-Access-Jwt-Assertion`. It records only a SHA-256-derived subject pseudonym. Raw Access identity and JWT data are neither stored nor logged.
+1. Configure Access Managed OAuth and origin JWT validation before enabling ingress. Keep authentication in `cloudflare-access` mode. Set `GROK_MCP_ENABLE_LIST_SUBMISSIONS=false` for an intake-only endpoint.
+2. Verify missing, expired and invalid assertions are rejected. Test Host/Origin handling and the proxy source restrictions. Do not assume a reachable URL is authenticated.
+3. Add your approved `https://research.example.com/mcp` URL to the Grok custom connector and complete sign-in. Verify discovery exposes exactly `submit_research_note` for the intake-only profile.
+4. Submit one synthetic candidate with a stable idempotency key. An identical retry must return the original receipt; changed content with the same key must be rejected. Verify the candidate and receipt without reading unrelated notes.
+5. Check receipt on the intended second client separately. Test renewal, reconnect and recovery within an explicit scope before relying on unattended operation.
+6. If scheduling research, require one stable key per logical item/run and require the job to report authentication or intake failures. A saved schedule does not establish a successful scheduled submission.
 
-The JWKS request is made only at runtime when Access authentication is actually configured and a request needs validation. No Cloudflare call occurs in local-development mode.
+Never expose local-development mode, substitute a shared static token, use a quick Tunnel for durable service, or grant Grok broader vault access. Keep tokens, assertions, private research and raw authentication logs out of Git and test reports.
+
+The [official connector guide](https://docs.x.ai/grok/connectors) and [Cloudflare Managed OAuth documentation](https://developers.cloudflare.com/cloudflare-one/access-controls/applications/http-apps/managed-oauth/) describe provider setup. Recheck them when configuring a new deployment; a successful test on the reference installation does not prove compatibility for every client or account.

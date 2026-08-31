@@ -1,11 +1,13 @@
 # Operational model and acceptance plan
 
+> Current status, 2026-08-31: See the [acceptance matrix](../docs/PROJECT-STATUS.md#evidence-and-limits). Authenticated relay, Grok OAuth/discovery, one durable live submission, the free-space guard are recorded as passed. Cross-client receipt, renewal/reconnect, full restore and Hermes promotion remain open. Earlier planned phases and gate lists below are historical; this document does not authorize replaying them.
+
 ## Ownership
 
 | Role | Responsibilities |
 | --- | --- |
 | User | Select topology, identity model, retention, and deployment authority. Approve all external-account and vault actions. |
-| Grok | Submit research through the two constrained tools only. It has no curator authority. |
+| Grok | Submit research through `submit_research_note` only in the deployed profile. It has no curator authority. |
 | Connector service | Validate identity and schema, enforce limits, write immutable intake records, and produce minimal audit events. |
 | Hermes | Review untrusted inbox notes, decide whether to promote, and perform any promotion through a separate trusted workflow. |
 | Cloudflare, if selected | Host the Worker or publish the named Tunnel and enforce the approved edge authentication/policy. |
@@ -32,7 +34,7 @@
 
 ### Phase 0: design proof without a real vault
 
-1. Build a mock Streamable HTTP MCP endpoint with only the two proposed tools and a temporary non-sensitive storage fixture.
+1. Build a mock Streamable HTTP MCP endpoint with only the intended tools and a temporary non-sensitive storage fixture.
 2. Add it to the exact Grok custom connector surface the user intends to use.
 3. Verify tool discovery, the Managed OAuth flow, `submit_research_note`, idempotency, and origin validation of the Access JWT.
 4. Verify the user can restrict the available tools to the proposed allowlist where the Grok surface exposes that setting.
@@ -65,7 +67,7 @@ Use synthetic research content. Hermes receives an inbox note, recognizes its pr
 
 - Grok can create exactly one synthetic candidate in the fixed test staging inbox through `submit_research_note`.
 - No observed request can create, modify, list, or disclose a file outside that staging inbox.
-- The only remotely discoverable tools are the approved two, and the Grok configuration uses an allowlist where available.
+- The only remotely discoverable tools are exactly those enabled by the approved deployment profile, and the Grok configuration uses an allowlist where available.
 - Authentication is required, revocation works, and no sensitive data appears in test logs.
 - A duplicate request yields one note.
 - A test symlink/reparse-point attempt fails safely.
@@ -73,3 +75,26 @@ Use synthetic research content. Hermes receives an inbox note, recognizes its pr
 - The selected topology's recovery behavior is documented and tested: tunnel/host outage for A, queue/importer outage for B.
 
 No real-vault rollout should begin until all applicable criteria pass and the user explicitly authorizes the next phase.
+
+## Vault proof gate added on 2026-08-30
+
+Run this gate before finalizing promotion or starting production intake. The earlier phase numbers describe the connector tests; they do not authorize vault access, account changes, or public activation. The [public status summary](../docs/PROJECT-STATUS.md) identifies current evidence gaps; the procedure below is a template for separately authorized client tests.
+
+1. User names the trusted writing client, its canonical vault path, intended receiving clients, permitted test folder, and curator identity. Confirm only one Sync implementation operates on each device. Record the selected directions explicitly.
+2. Obtain scoped permission for a uniquely named synthetic note and exact-file reads/hashes on those clients. Record approval, UTC and America/Chicago timestamps, application/sync versions, run ID, and expected file digest. Do not enumerate private notes or inspect credential/configuration files.
+3. Under that approval, create one synthetic Markdown note on the trusted writer, with no private content. Verify arrival on the reference host and each named receiver using its exact path and full-file hash. Check only test-ID-matching entries for duplicate/conflict artifacts in the approved test folder. Record per-client outcomes and timestamps. A missing or mismatched file is a failed proof, not permission to change settings.
+4. Update only that synthetic note on the writer and repeat delivery verification. the reference host local writes are not part of this proof when pull-only is retained. If another direction is required, approve and test it explicitly.
+5. Separately approve a bounded reconnect or restart on one named client. Record pre/post service state and recovery time; verify that the synthetic update arrives once and retains its digest. Stop on unexpected sync state or conflict. Do not stop services or alter network settings as part of the initial delivery-only approval.
+6. Identify backup owner, mechanism, retention, protected destination, and restore procedure without reading private backups. After separate approval, restore only the synthetic fixture to an isolated destination and verify its full-file digest. Sync convergence alone does not prove backup recovery.
+7. Under separate curator approval, deliver one synthetic intake candidate to Hermes, review it as untrusted text, and promote through the selected writer. Replay the same handoff and prove no second canonical note is created. Retain the immutable intake receipt. Record curator outcome separately; MCP listing must still report only `accepted`.
+8. Agree on retention or cleanup of synthetic notes. Do not delete them, restore real notes, change sync mode, or grant permissions under the delivery-only scope.
+
+Each evidence row records test/run ID, source and destination client aliases, direction, timestamps, versions, synthetic relative path, `file_sha256`, outcome, and any duplicate/conflict count. Keep body digest and full-file digest in separate fields. Record untested steps as pending. Keep account identifiers, secrets, private filenames/content, and raw sync logs out of the repository.
+
+Public activation additionally requires the chosen hostname and Access identity, harmless OAuth proof, staging storage safeguards, and approved backup handling. No background monitoring is authorized by this plan.
+
+## Recorded execution and open checks
+
+The reference deployment's private acceptance records document restricted intake, server acknowledgement, local restart checks, Managed OAuth, single-tool discovery and one durable synthetic submission. The public [status summary](../docs/PROJECT-STATUS.md) distinguishes these recorded results from checks repeated during publication preparation.
+
+Another client's receipt, return-direction edits, OAuth renewal/reconnect, full restore and curator promotion remain open. The selected request path includes an existing reverse proxy and a source-restricted relay; addresses and recovery procedures remain in private operator records.

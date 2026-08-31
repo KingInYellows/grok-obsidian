@@ -6,6 +6,7 @@ export interface AppConfig {
   readonly stagingRoot: string;
   readonly inboxDir: string;
   readonly auditDir: string;
+  readonly noteFileMode: 0o600 | 0o640;
   readonly authMode: AuthMode;
   readonly accessTeamDomain?: string;
   readonly accessAudience?: string;
@@ -14,6 +15,7 @@ export interface AppConfig {
   readonly maxRequestBytes: number;
   readonly maxResearchBytes: number;
   readonly maxNoteBytes: number;
+  readonly minFreeBytes: number;
   readonly requestsPerMinute: number;
   readonly enableListSubmissions: boolean;
 }

@@ -1,5 +1,7 @@
 # Primary-source registry
 
+> Historical planning record from 2026-08-29. These original assumptions and questions are not the current deployment status or a new authorization request. See [project status](../docs/PROJECT-STATUS.md) for recorded acceptance and remaining checks.
+
 Research date: 2026-08-29. These sources were consulted for planning only; no linked service was configured or accessed as an account holder.
 
 | Topic | Primary source | Planning use |

@@ -1,0 +1,4 @@
+# Install as the final EnvironmentFile drop-in; Environment= alone cannot
+# override values from inherited EnvironmentFile entries.
+[Service]
+EnvironmentFile=/etc/grok-obsidian-mcp/intake-only.conf

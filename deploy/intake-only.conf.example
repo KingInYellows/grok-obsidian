@@ -1,0 +1,4 @@
+# Non-secret public deployment restrictions. Load after other environment files.
+GROK_MCP_AUTH_MODE=cloudflare-access
+GROK_MCP_ENABLE_LIST_SUBMISSIONS=false
+GROK_MCP_NOTE_FILE_MODE=0640

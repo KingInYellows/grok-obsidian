@@ -15,3 +15,29 @@ secrets/
 *.p12
 *.pfx
 *.partial
+
+__pycache__/
+
+# Private operator records stay local. These rules do not erase Git history.
+/AGENTS.md
+/deploy/argus-relay/
+/deploy/grok-obsidian-mcp-inbox.conf.example
+/deploy/obsidian-sync-inbox.conf.example
+/deploy/obsidian-sync-runner.py
+/test/obsidian_sync_runner_test.py
+/docs/ARGUS-INBOX-OPERATIONS.md
+/docs/ARCHITECTURE-DIAGRAMS.md
+/docs/GROK-RESEARCH-SUBMISSION-SKILL-DRAFT.md
+/docs/diagrams/
+
+# Only the reviewed, generic planning documents belong in the public repository.
+/outputs/*
+!/outputs/README.md
+!/outputs/01-problem-statement-and-scope.md
+!/outputs/02-threat-model.md
+!/outputs/03-architecture-decision-record.md
+!/outputs/04-mcp-contract-and-schema.md
+!/outputs/05-operations-and-acceptance.md
+!/outputs/06-decision-questions.md
+!/outputs/IMPLEMENTATION-READINESS.md
+!/outputs/SOURCES.md

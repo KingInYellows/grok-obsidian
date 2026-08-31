@@ -2,6 +2,7 @@
   "name": "grok-obsidian-mcp",
   "version": "0.1.0",
   "private": true,
+  "license": "MIT",
   "description": "Security-scoped MCP intake server for Grok research candidates.",
   "type": "module",
   "engines": {

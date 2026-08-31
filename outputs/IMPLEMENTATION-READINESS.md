@@ -2,7 +2,9 @@
 
 Date: 2026-08-29
 
-Status: local implementation complete. Cloudflare, Grok, credentials, and a real Obsidian vault were not accessed or configured.
+Historical status on 2026-08-29: local implementation complete. Cloudflare, Grok, credentials, and a real Obsidian vault were not accessed or configured.
+
+Current status, 2026-08-31: the reference deployment has recorded authenticated single-tool intake. See [project status](../docs/PROJECT-STATUS.md) for fresh checks and remaining limits. The results below describe the original implementation phase.
 
 ## Implemented outcome
 
@@ -15,7 +17,7 @@ Status: local implementation complete. Cloudflare, Grok, credentials, and a real
 - Explicit local-development authentication mode and production Cloudflare Access JWT validation using issuer, audience, signature, and subject.
 - Placeholder-only environment, systemd, and named-Tunnel configuration examples.
 
-## Fresh validation evidence
+## Validation evidence from the implementation phase
 
 `npm run validate` exited 0:
 
@@ -39,7 +41,9 @@ npm start
 
 Local testing requires explicit `GROK_MCP_AUTH_MODE=local-development`. Never connect a Tunnel in that mode.
 
-## Remaining user-authorized work
+## Original follow-up checklist
+
+This historical checklist is superseded by the [current status summary](../docs/PROJECT-STATUS.md). Account and staging preparation subsequently occurred on the reference host; consult its deployment record before repeating any setup.
 
 1. Choose or create the real staging root, fixed `Grok Research Inbox`, and separate audit directory. Prefer staging outside the canonical vault.
 2. Create or select a low-privilege OS account with access only to those staging directories.

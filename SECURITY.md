@@ -14,7 +14,7 @@ There are no MCP resources or prompts. There are no tools for reading notes, bro
 - Run under a dedicated low-privilege OS account.
 - Give that account write access only to the staging inbox and service audit directory. Do not grant it access to the canonical vault.
 - Prefer a staging root outside the canonical Obsidian vault. If a folder inside a vault is deliberately selected later, its permissions must still exclude every sibling and parent capability.
-- Keep the origin bound to `127.0.0.1`. A named Cloudflare Tunnel may later publish only `/mcp`.
+- Keep the origin bound to `127.0.0.1`. A named Cloudflare Tunnel may publish only `/mcp` after authentication and proxy restrictions are validated. The reference deployment has recorded live acceptance; new installations need their own proof.
 - A Tunnel provides reachability, not authentication. Before any tunnel is connected, configure Cloudflare Access Managed OAuth and set this service to `cloudflare-access` mode so it validates the Access JWT.
 - If the exact Grok connector cannot complete the harmless Managed OAuth compatibility proof, stop. Do not make the endpoint public and do not substitute a shared static token.
 
@@ -27,3 +27,9 @@ Logs contain event names, tool names, and error classes only. They must not cont
 ## Reporting
 
 Do not include a real vault sample, private note body, token, Access assertion, tunnel credential, or `.env` file in an issue. Reproduce problems with synthetic temporary directories and synthetic content.
+
+## Public repository boundary
+
+The repository contains reusable intake code, synthetic tests and placeholder configuration. It does not grant access to an operated endpoint or publish its credentials, network inventory, private vault content, personal automation configuration or recovery records. The reference deployment disables `list_submissions`; new installations must set that option explicitly if they require submission-only discovery.
+
+Do not report a suspected vulnerability with live credentials or private content in a public issue. Use an available private maintainer reporting channel and a synthetic reproduction. Passing tests and a publication secret scan are not a full security certification.
