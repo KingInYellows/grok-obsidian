@@ -138,6 +138,7 @@ export async function loadConfig(
     inboxDir,
     auditDir,
     noteFileMode: noteFileMode === "0640" ? 0o640 : 0o600,
+    privateFileMode: z.enum(["0600", "0640"]).parse(env.GROK_MCP_PRIVATE_FILE_MODE ?? "0600") === "0640" ? 0o640 : 0o600,
     authMode,
     ...(accessTeamDomain ? { accessTeamDomain } : {}),
     ...(accessAudience ? { accessAudience } : {}),
@@ -163,6 +164,20 @@ export async function loadConfig(
       8_192,
       131_072,
       "GROK_MCP_MAX_NOTE_BYTES",
+    ),
+    maxOriginalBytes: parseInteger(
+      env.GROK_MCP_MAX_ORIGINAL_BYTES,
+      1_073_741_824,
+      1,
+      Number.MAX_SAFE_INTEGER,
+      "GROK_MCP_MAX_ORIGINAL_BYTES",
+    ),
+    maxOriginals: parseInteger(
+      env.GROK_MCP_MAX_ORIGINALS,
+      10_000,
+      1,
+      1_000_000,
+      "GROK_MCP_MAX_ORIGINALS",
     ),
     minFreeBytes: parseInteger(
       env.GROK_MCP_MIN_FREE_BYTES,
