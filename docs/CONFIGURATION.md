@@ -81,3 +81,11 @@ This is an admission threshold, not a filesystem quota or a reservation: other
 writers can consume space after the check, and an accepted write can cross the
 threshold. Write failures clean up files created by that attempt; existing
 exclusive-create collisions are preserved. Retain backups and capacity planning.
+
+## Private originals
+
+See [original preservation](ORIGINAL-PRESERVATION.md) for storage ordering, new internal
+audit metadata, quotas, legacy handling and rollback. `GROK_MCP_MAX_ORIGINALS` defaults
+to 10000; `GROK_MCP_MAX_ORIGINAL_BYTES` defaults to 1073741824. No activation is implied.
+
+Private original and audit publication defaults to 0600. Opt in to `GROK_MCP_PRIVATE_FILE_MODE=0640` only with service-owned setgid directories and a dedicated read-only relay group. This setting changes new files only; it does not migrate historical files or grant directory traversal. Pending metadata inherits its group before being renamed into committed.
