@@ -32,15 +32,15 @@ Available in the reusable implementation, but disabled for the approved public d
 
 ## Local launch
 
-Node.js 22 or newer is required. Create a synthetic staging fixture or the user-selected real staging directories first. Do not point this service at a whole vault.
+Node.js 22 or newer on Linux is required. The staging filesystem must support atomic hardlinks and file/directory fsync; native Windows is not supported. Durability errors fail closed and are never bypassed. Create a synthetic staging fixture or the user-selected real staging directories first. Do not point this service at a whole vault.
 
-PowerShell example using placeholder paths:
+Linux shell example using placeholder paths:
 
-```powershell
-$env:GROK_MCP_STAGING_ROOT = 'C:\path\to\grok-staging'
-$env:GROK_MCP_INBOX_DIR = 'C:\path\to\grok-staging\Grok Research Inbox'
-$env:GROK_MCP_AUDIT_DIR = 'C:\path\to\grok-staging\service-audit'
-$env:GROK_MCP_AUTH_MODE = 'local-development'
+```sh
+export GROK_MCP_STAGING_ROOT='/path/to/grok-staging'
+export GROK_MCP_INBOX_DIR='/path/to/grok-staging/Grok Research Inbox'
+export GROK_MCP_AUDIT_DIR='/path/to/grok-staging/service-audit'
+export GROK_MCP_AUTH_MODE='local-development'
 npm ci
 npm run build
 npm start
@@ -50,7 +50,7 @@ The server reports a sanitized startup event and listens at `http://127.0.0.1:31
 
 ## Validation
 
-Use Node.js 22 or newer and native dependencies in your own checkout:
+Use Node.js 22 or newer on Linux and native dependencies in your own checkout:
 
 ```sh
 npm ci

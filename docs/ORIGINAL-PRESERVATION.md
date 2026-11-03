@@ -18,7 +18,9 @@ originals directory; publish/fsync inbox copy; commit audit metadata and fsync b
 directories; only then return acceptance. Directory fsync must work; failure is not ignored.
 The service-managed audit root and its originals subtree must stay outside every synced
 vault and remain writable only by the service. Consumer read ACLs must never grant writes.
-Filesystem and storage must honor fsync. This is not isolation from a root-capable agent.
+The supported runtime is Linux; native Windows is unsupported because this
+durability path requires opening and syncing directory descriptors. Filesystem
+and storage must honor fsync and atomic hardlinks. This is not isolation from a root-capable agent.
 
 Recovery uses only the private original and trusted metadata, never the possibly edited
 synced note. Before private publication, an interrupted attempt is discarded and can be
