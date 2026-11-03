@@ -17,7 +17,9 @@ synchronization and natural scheduling are distinct. General non-hub submissions
 are unchanged. Existing identical committed-key retries return their original
 receipt after request-hash and original-integrity checks, including historical
 malformed hub submissions. Changed-content reuse remains a conflict. No existing
-record is rewritten, reclassified, retried or promoted by this change.
+record is rewritten, reclassified, retried or promoted by this change. Historical
+private-original reads retain the supported 128 KiB storage ceiling, so lowering
+the future-note admission limit cannot block startup or intact receipt retries.
 
 MCP errors use the existing InputError path with a bounded generic diagnostic. No
 payload fragments, run IDs or private paths are returned in the guard diagnostic.

@@ -190,3 +190,23 @@ test("private read mode survives restrictive umask and committed rename", async 
     assert.deepEqual(await restarted.submit("synthetic-owner", input), receipt);
   } finally { process.umask(previous); await f.cleanup(); }
 });
+
+
+test("lowering new-note limit preserves intact historical originals and receipts", async () => {
+  const f = await createTestFixture();
+  try {
+    const store = new SubmissionStore(f.config);
+    await store.initialize();
+    const large = { ...input, body_markdown: "x".repeat(9000) };
+    const receipt = await store.submit("synthetic-owner", large);
+    const original = path.join(f.auditDir, "originals", receipt.note_id + ".md");
+    const before = await readFile(original);
+    assert.ok(before.length > 8192);
+    const restarted = new SubmissionStore({ ...f.config, maxNoteBytes: 8192 });
+    await restarted.initialize();
+    assert.deepEqual(await restarted.submit("synthetic-owner", large), receipt);
+    await assert.rejects(restarted.submit("synthetic-owner", { ...large, idempotency_key: "new_large_note_12345" }), /rendered note exceeds/);
+    assert.deepEqual(await readFile(original), before);
+    assert.equal((await readdir(path.join(f.auditDir, "committed"))).length, 1);
+  } finally { await f.cleanup(); }
+});

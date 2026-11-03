@@ -447,7 +447,8 @@ export class SubmissionStore {
     const handle = await open(path.join(this.#originalsDir, `${record.note_id}.md`), fsConstants.O_RDONLY | fsConstants.O_NOFOLLOW);
     try {
       const info = await handle.stat();
-      if (!info.isFile() || info.nlink !== 1 || info.size > this.#config.maxNoteBytes ||
+      // Historical reads use the supported storage ceiling, not today's admission limit.
+      if (!info.isFile() || info.nlink !== 1 || info.size > 128 * 1024 ||
           (info.mode & 0o022) || (process.getuid && info.uid !== process.getuid())) {
         throw new ConfigurationError("original failed regular-file safety check");
       }
