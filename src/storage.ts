@@ -21,6 +21,7 @@ import {
   validateDirectoryBoundary,
 } from "./path-safety.js";
 import { submissionRecordSchema } from "./schema.js";
+import { validateHubSubmission } from "./hub-submission.js";
 import type {
   AppConfig,
   SubmissionInput,
@@ -283,6 +284,7 @@ export class SubmissionStore {
         return receiptFrom(existing);
       }
 
+      validateHubSubmission(input);
       await this.#assertStorageAvailable();
       for (let attempt = 0; attempt < 5; attempt += 1) {
         const submittedAt = this.#dependencies.now();

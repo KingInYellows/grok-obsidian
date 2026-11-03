@@ -79,6 +79,21 @@ test("local Streamable HTTP MCP advertises only the bounded tools and handles a 
     });
     assert.equal(nulRejected.isError, true);
 
+    const incompleteHub = await client.callTool({
+      name: "submit_research_note",
+      arguments: {
+        title: "SYNTHETIC incomplete hub",
+        topic: "intelligence-hub-v1",
+        body_markdown: "<!-- intelligence-hub:submission:v1 -->\n```json\n",
+        idempotency_key: "daily-synthetic-incomplete-20261103",
+      },
+    });
+    assert.equal(incompleteHub.isError, true);
+    assert.equal(incompleteHub.structuredContent, undefined);
+    assert.equal(JSON.stringify(incompleteHub.content).includes("accepted"), false);
+    const emptyAfterRejection = await client.callTool({ name: "list_submissions", arguments: { limit: 20 } });
+    assert.deepEqual(emptyAfterRejection.structuredContent, { submissions: [] });
+
     const accepted = await client.callTool({
       name: "submit_research_note",
       arguments: {
