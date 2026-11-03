@@ -33,11 +33,13 @@ import type {
 interface StorageDependencies {
   readonly randomUuid: () => string;
   readonly now: () => Date;
+  readonly checkpoint: (stage: string) => Promise<void>;
   readonly availableBytes: (directory: string) => Promise<bigint>;
 }
 
 const defaultDependencies: StorageDependencies = {
   randomUuid: randomUUID,
+  checkpoint: async () => undefined,
   now: () => new Date(),
   availableBytes: async (directory) => {
     const stats = await statfs(directory, { bigint: true });
@@ -181,6 +183,15 @@ async function removeIfPresent(filePath: string): Promise<void> {
   });
 }
 
+async function syncDirectory(directory: string): Promise<void> {
+  const handle = await open(directory, fsConstants.O_RDONLY);
+  try {
+    await handle.sync();
+  } finally {
+    await handle.close();
+  }
+}
+
 function encodeCursor(noteId: string): string {
   return Buffer.from(JSON.stringify({ version: 1, note_id: noteId }), "utf8").toString(
     "base64url",
@@ -214,6 +225,8 @@ export class SubmissionStore {
   readonly #recordsByIdempotency = new Map<string, SubmissionRecord>();
   readonly #pendingDir: string;
   readonly #committedDir: string;
+  readonly #originalsDir: string;
+  #recoveryRequired = false;
   #queue: Promise<void> = Promise.resolve();
 
   constructor(config: AppConfig, dependencies: Partial<StorageDependencies> = {}) {
@@ -221,6 +234,7 @@ export class SubmissionStore {
     this.#dependencies = { ...defaultDependencies, ...dependencies };
     this.#pendingDir = path.join(config.auditDir, "pending");
     this.#committedDir = path.join(config.auditDir, "committed");
+    this.#originalsDir = path.join(config.auditDir, "originals");
   }
 
   async initialize(): Promise<void> {
@@ -233,13 +247,19 @@ export class SubmissionStore {
       this.#committedDir,
       "committed audit directory",
     );
+    await mkdir(this.#originalsDir, { recursive: true, mode: 0o700 });
+    await validateDirectoryBoundary(this.#config.stagingRoot, this.#originalsDir, "original directory");
+    await this.#assertPrivateOriginalDirectory();
+    await syncDirectory(this.#config.auditDir);
     await this.#reconcilePendingRecords();
     await this.#loadCommittedRecords();
   }
 
   async submit(ownerSubject: string, input: SubmissionInput): Promise<SubmissionReceipt> {
     return this.#exclusive(async () => {
+      if (this.#recoveryRequired) throw new StorageUnavailableError("Storage recovery requires restart.");
       await this.#assertRuntimeBoundary();
+      await this.#assertPrivateOriginalDirectory();
       for (const value of [input.title, input.body_markdown, input.topic ?? "", ...(input.source_urls ?? [])]) {
         if (hasUnpairedSurrogate(value)) {
           throw new InputError("input contains invalid Unicode");
@@ -259,6 +279,7 @@ export class SubmissionStore {
         if (existing.request_sha256 !== requestHash) {
           throw new InputError("idempotency key was already used for different content");
         }
+        if (existing.original_sha256) await this.#readOriginal(existing);
         return receiptFrom(existing);
       }
 
@@ -279,7 +300,7 @@ export class SubmissionStore {
         assertSafeGeneratedBasename(filename, "generated filename");
         assertSafeGeneratedBasename(tempFilename, "generated temporary filename");
 
-        const record: SubmissionRecord = {
+        let record: SubmissionRecord = {
           note_id: noteId,
           submitted_at: submittedAt.toISOString(),
           status: "accepted",
@@ -297,20 +318,57 @@ export class SubmissionStore {
           throw new InputError("rendered note exceeds the configured byte limit");
         }
 
+        record = { ...record, original_sha256: sha256(note) };
+        await this.#assertOriginalCapacity(Buffer.byteLength(note, "utf8"));
+        const originalPath = path.join(this.#originalsDir, `${noteId}.md`);
+        const originalTemp = path.join(this.#originalsDir, `${noteId}.partial`);
         const pendingPath = path.join(this.#pendingDir, `${noteId}.json`);
         const committedPath = path.join(this.#committedDir, `${noteId}.json`);
+        const pendingTemp = path.join(this.#pendingDir, `${noteId}.partial`);
         const tempPath = path.join(this.#config.inboxDir, tempFilename);
         const finalPath = path.join(this.#config.inboxDir, filename);
+        // Avoid known collisions before retaining a private original. Any later race
+        // fails closed and is reconciled from the private transaction on restart.
+        let collision = false;
+        for (const candidate of [pendingPath, pendingTemp, committedPath, originalPath, originalTemp, tempPath, finalPath]) {
+          const found = await lstat(candidate).catch((error: NodeJS.ErrnoException) => {
+            if (error.code !== "ENOENT") throw error;
+            return undefined;
+          });
+          if (found) collision = true;
+        }
+        if (collision) continue;
         let pendingCreated = false;
+        let pendingTempCreated = false;
         let tempCreated = false;
-        let finalPublished = false;
+        let originalTempCreated = false;
+        let originalPublished = false;
         try {
-          await writeExclusive(pendingPath, `${JSON.stringify(record)}\n`);
+          await writeExclusive(pendingTemp, `${JSON.stringify(record)}\n`, this.#config.privateFileMode);
+          pendingTempCreated = true;
+          await this.#dependencies.checkpoint("pending-temp");
+          await link(pendingTemp, pendingPath);
           pendingCreated = true;
+          await this.#dependencies.checkpoint("pending-linked");
+          await removeIfPresent(pendingTemp);
+          pendingTempCreated = false;
+          await syncDirectory(this.#pendingDir);
+          await this.#dependencies.checkpoint("pending");
+          await writeExclusive(originalTemp, note, this.#config.privateFileMode);
+          originalTempCreated = true;
+          await this.#dependencies.checkpoint("original-temp");
+          await link(originalTemp, originalPath);
+          originalPublished = true;
+          await this.#dependencies.checkpoint("original-linked");
+          await removeIfPresent(originalTemp);
+          originalTempCreated = false;
+          await syncDirectory(this.#originalsDir);
+          await this.#readOriginal(record);
+          await this.#dependencies.checkpoint("original");
           await writeExclusive(tempPath, note, this.#config.noteFileMode);
           tempCreated = true;
           await link(tempPath, finalPath);
-          finalPublished = true;
+          await this.#dependencies.checkpoint("inbox-linked");
           await removeIfPresent(tempPath);
           tempCreated = false;
           const finalStats = await lstat(finalPath);
@@ -321,13 +379,25 @@ export class SubmissionStore {
           if (!isStrictlyContained(this.#config.inboxDir, physicalFinalPath)) {
             throw new ConfigurationError("published note resolved outside the inbox directory");
           }
+          await syncDirectory(this.#config.inboxDir);
+          await this.#dependencies.checkpoint("inbox");
           await rename(pendingPath, committedPath);
+          await syncDirectory(this.#committedDir);
+          await syncDirectory(this.#pendingDir);
+          await this.#dependencies.checkpoint("committed");
           this.#remember(record);
           return receiptFrom(record);
         } catch (error) {
+          if (originalPublished) {
+            // Never remove a durable original or a possibly curator-edited publication.
+            // Retain the transaction for restart reconciliation; no second submission now.
+            this.#recoveryRequired = true;
+            throw error;
+          }
           if (tempCreated) await removeIfPresent(tempPath);
-          if (finalPublished) await removeIfPresent(finalPath);
+          if (originalTempCreated) await removeIfPresent(originalTemp);
           if (pendingCreated) await removeIfPresent(pendingPath);
+          if (pendingTempCreated) await removeIfPresent(pendingTemp);
           if ((error as NodeJS.ErrnoException).code === "EEXIST") continue;
           throw error;
         }
@@ -363,6 +433,48 @@ export class SubmissionStore {
     });
   }
 
+  async #assertPrivateOriginalDirectory(): Promise<void> {
+    await validateDirectoryBoundary(this.#config.stagingRoot, this.#originalsDir, "original directory");
+    const info = await lstat(this.#originalsDir);
+    if ((info.mode & 0o022) || (process.getuid && info.uid !== process.getuid())) {
+      throw new ConfigurationError("original directory must be service-owned and not shared-writable");
+    }
+  }
+
+  async #readOriginal(record: SubmissionRecord): Promise<Buffer> {
+    const handle = await open(path.join(this.#originalsDir, `${record.note_id}.md`), fsConstants.O_RDONLY | fsConstants.O_NOFOLLOW);
+    try {
+      const info = await handle.stat();
+      if (!info.isFile() || info.nlink !== 1 || info.size > this.#config.maxNoteBytes ||
+          (info.mode & 0o022) || (process.getuid && info.uid !== process.getuid())) {
+        throw new ConfigurationError("original failed regular-file safety check");
+      }
+      const bytes = await handle.readFile();
+      if (createHash("sha256").update(bytes).digest("hex") !== record.original_sha256) {
+        throw new ConfigurationError("original integrity mismatch");
+      }
+      return bytes;
+    } finally {
+      await handle.close();
+    }
+  }
+
+  async #assertOriginalCapacity(additionalBytes: number): Promise<void> {
+    let count = 0;
+    let bytes = 0;
+    for (const entry of await readdir(this.#originalsDir, { withFileTypes: true })) {
+      const info = await lstat(path.join(this.#originalsDir, entry.name));
+      if (!entry.isFile() || !/^grn_[a-f0-9]{32}\.(md|partial)$/u.test(entry.name) || info.nlink !== 1) {
+        throw new ConfigurationError("unexpected original storage entry");
+      }
+      count += 1;
+      bytes += info.size;
+    }
+    if (count >= this.#config.maxOriginals || bytes + additionalBytes > this.#config.maxOriginalBytes) {
+      throw new StorageUnavailableError("New submissions are paused because original storage is full.");
+    }
+  }
+
   async #assertStorageAvailable(): Promise<void> {
     try {
       for (const directory of [this.#config.inboxDir, this.#config.auditDir]) {
@@ -392,22 +504,64 @@ export class SubmissionStore {
 
   async #reconcilePendingRecords(): Promise<void> {
     const entries = await readdir(this.#pendingDir, { withFileTypes: true });
+    // Metadata is staged and fsynced before its committed pending name appears.
+    // No original can be published until these temporary metadata links are gone.
     for (const entry of entries) {
+      if (entry.isFile() && /^grn_[a-f0-9]{32}\.partial$/u.test(entry.name)) {
+        await removeIfPresent(path.join(this.#pendingDir, entry.name));
+      }
+    }
+    await syncDirectory(this.#pendingDir);
+    const records = entries.filter(entry =>
+      !(entry.isFile() && /^grn_[a-f0-9]{32}\.partial$/u.test(entry.name)),
+    );
+    for (const entry of records) {
       if (!entry.isFile() || !/^grn_[a-f0-9]{32}\.json$/u.test(entry.name)) {
         throw new ConfigurationError("pending audit directory contains an unexpected entry");
       }
       const pendingPath = path.join(this.#pendingDir, entry.name);
       const record = await this.#readRecord(pendingPath);
-      const finalPath = path.join(this.#config.inboxDir, record.filename);
-      const tempPath = path.join(this.#config.inboxDir, record.temp_filename);
-      const committedPath = path.join(this.#committedDir, entry.name);
-      await removeIfPresent(tempPath);
-      const finalStats = await lstat(finalPath).catch(() => undefined);
-      if (finalStats?.isFile() && !finalStats.isSymbolicLink() && finalStats.nlink === 1) {
-        await rename(pendingPath, committedPath);
-      } else {
-        await removeIfPresent(pendingPath);
+      if (`${record.note_id}.json` !== entry.name || !record.original_sha256) {
+        throw new ConfigurationError("pending legacy transaction requires migration review");
       }
+      const originalPath = path.join(this.#originalsDir, `${record.note_id}.md`);
+      const originalTemp = path.join(this.#originalsDir, `${record.note_id}.partial`);
+      const committedPath = path.join(this.#committedDir, entry.name);
+      const originalStats = await lstat(originalPath).catch((error: NodeJS.ErrnoException) => {
+        if (error.code !== "ENOENT") throw error;
+        return undefined;
+      });
+      if (!originalStats) {
+        // Interrupted before publication: no acceptance was returned. Do not use a
+        // synced note to manufacture a trusted original during recovery.
+        await removeIfPresent(originalTemp);
+        await removeIfPresent(pendingPath);
+        await syncDirectory(this.#pendingDir);
+        continue;
+      }
+      // A kill between link and unlink can leave our two private names for one inode.
+      const tempStats = await lstat(originalTemp).catch(() => undefined);
+      if (tempStats && tempStats.ino === originalStats.ino && tempStats.dev === originalStats.dev) {
+        await removeIfPresent(originalTemp);
+      }
+      await this.#readOriginal(record);
+      await syncDirectory(this.#originalsDir);
+      // Do not inspect, restore, remove or rewrite the curator-owned synced copy.
+      const existingCommit = await lstat(committedPath).catch((error: NodeJS.ErrnoException) => {
+        if (error.code !== "ENOENT") throw error;
+        return undefined;
+      });
+      if (existingCommit) {
+        const committed = await this.#readRecord(committedPath);
+        if (JSON.stringify(committed) !== JSON.stringify(record)) {
+          throw new ConfigurationError("pending transaction conflicts with committed record");
+        }
+        await removeIfPresent(pendingPath);
+      } else {
+        await rename(pendingPath, committedPath);
+      }
+      await syncDirectory(this.#committedDir);
+      await syncDirectory(this.#pendingDir);
     }
   }
 
@@ -421,6 +575,7 @@ export class SubmissionStore {
       if (`${record.note_id}.json` !== entry.name) {
         throw new ConfigurationError("audit record filename does not match its note ID");
       }
+      if (record.original_sha256) await this.#readOriginal(record);
       this.#remember(record);
     }
   }

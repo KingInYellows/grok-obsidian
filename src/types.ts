@@ -7,6 +7,7 @@ export interface AppConfig {
   readonly inboxDir: string;
   readonly auditDir: string;
   readonly noteFileMode: 0o600 | 0o640;
+  readonly privateFileMode: 0o600 | 0o640;
   readonly authMode: AuthMode;
   readonly accessTeamDomain?: string;
   readonly accessAudience?: string;
@@ -16,6 +17,8 @@ export interface AppConfig {
   readonly maxResearchBytes: number;
   readonly maxNoteBytes: number;
   readonly minFreeBytes: number;
+  readonly maxOriginalBytes: number;
+  readonly maxOriginals: number;
   readonly requestsPerMinute: number;
   readonly enableListSubmissions: boolean;
 }
@@ -50,6 +53,7 @@ export interface SubmissionRecord extends SubmissionMetadata {
   readonly request_sha256: string;
   readonly filename: string;
   readonly temp_filename: string;
+  readonly original_sha256?: string;
 }
 
 export interface SubmissionPage {

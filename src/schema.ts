@@ -76,4 +76,5 @@ export const submissionRecordSchema = submissionMetadataSchema.extend({
   request_sha256: z.string().regex(/^[a-f0-9]{64}$/u),
   filename: z.string().regex(/^[A-Za-z0-9][A-Za-z0-9-]{0,180}\.md$/u),
   temp_filename: z.string().regex(/^grn_[a-f0-9]{32}\.partial$/u),
+  original_sha256: z.string().regex(/^[a-f0-9]{64}$/u).optional(),
 });
